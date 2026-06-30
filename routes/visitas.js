@@ -1,289 +1,160 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  Button,
-  ScrollView,
-  Image,
-  Alert,
-  StyleSheet,
-  ActivityIndicator
-} from 'react-native';
-import { Picker } from '@react-native-picker/picker';
-import * as Location from 'expo-location';
-import * as ImagePicker from 'expo-image-picker';
-import axios from 'axios';
+const express = require('express');
+const router = express.Router();
 
 // ============================================================
-// 🔴 URL DE LA API EN RAILWAY (DEBE SER EXACTAMENTE ESTA)
+// 1. IMPORTAR Y CONFIGURAR CLOUDINARY
 // ============================================================
-const API_URL = 'https://registro-visitas-production.up.railway.app/api';
-
-// ============================================================
-// COMPONENTE PRINCIPAL
-// ============================================================
-export default function RegistroVisita({ route, navigation }) {
-  const { tecnicoId, token } = route.params;
-
-  // Estados
-  const [servicios, setServicios] = useState([]);
-  const [identificador, setIdentificador] = useState('');      // ← NUEVO
-  const [servicioId, setServicioId] = useState('');
-  const [ubicacion, setUbicacion] = useState({
-    lat: null,
-    lng: null,
-    dir: 'Obteniendo...'
-  });
-  const [actividades, setActividades] = useState([{ descripcion: '', tiempo: '' }]);
-  const [fotos, setFotos] = useState([]);
-  const [novedad, setNovedad] = useState({ tipo: '', descripcion: '' });
-  const [cargando, setCargando] = useState(false);
-
-  // ============================================================
-  // 1. CARGAR LISTA DE SERVICIOS
-  // ============================================================
-  useEffect(() => {
-    const cargarServicios = async () => {
-      try {
-        const config = { headers: { Authorization: `Bearer ${token}` } };
-        const resServicios = await axios.get(`${API_URL}/visitas/servicios`, config);
-        setServicios(resServicios.data);
-      } catch (error) {
-        Alert.alert('Error', 'No se pudo cargar la lista de servicios');
-      }
-    };
-    cargarServicios();
-  }, []);
-
-  // ============================================================
-  // 2. OBTENER UBICACIÓN ACTUAL
-  // ============================================================
-  useEffect(() => {
-    (async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permiso denegado', 'No podremos registrar la ubicación');
-        return;
-      }
-      let location = await Location.getCurrentPositionAsync({});
-      const { latitude, longitude } = location.coords;
-      let reverse = await Location.reverseGeocodeAsync({ latitude, longitude });
-      let address = reverse[0]
-        ? `${reverse[0].street}, ${reverse[0].city}`
-        : 'Dirección desconocida';
-      setUbicacion({ lat: latitude, lng: longitude, dir: address });
-    })();
-  }, []);
-
-  // ============================================================
-  // 3. TOMAR FOTO
-  // ============================================================
-  const tomarFoto = async () => {
-    let result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.7,
-      base64: true,
-    });
-    if (!result.canceled) {
-      setFotos([...fotos, result.assets[0].base64]);
-    }
-  };
-
-  // ============================================================
-  // 4. ENVIAR VISITA (con identificador)
-  // ============================================================
-  const enviarVisita = async () => {
-    // Validaciones
-    if (!identificador || identificador.trim() === '') {
-      Alert.alert('Error', 'Ingresa un identificador (cédula o código de 6 dígitos)');
-      return;
-    }
-    if (identificador.length !== 6 && identificador.length !== 10) {
-      Alert.alert('Error', 'El identificador debe tener 6 o 10 dígitos');
-      return;
-    }
-    if (!servicioId) {
-      Alert.alert('Error', 'Selecciona un servicio');
-      return;
-    }
-
-    setCargando(true);
-    try {
-      const payload = {
-        tecnico_id: tecnicoId,
-        identificador: identificador.trim(),
-        servicio_id: parseInt(servicioId),
-        latitud: ubicacion.lat,
-        longitud: ubicacion.lng,
-        direccion: ubicacion.dir,
-        actividades: actividades.filter(a => a.descripcion !== ''),
-        novedades: novedad.descripcion ? novedad : null,
-        fotos: fotos
-      };
-
-      const response = await axios.post(`${API_URL}/visitas/iniciar`, payload, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      Alert.alert('✅ Éxito', `Visita registrada con ID: ${response.data.visita_id}`);
-      navigation.goBack();
-    } catch (error) {
-      console.error(error);
-      Alert.alert('Error', 'No se pudo guardar la visita');
-    } finally {
-      setCargando(false);
-    }
-  };
-
-  // ============================================================
-  // 5. RENDERIZADO DE LA PANTALLA
-  // ============================================================
-  return (
-    <ScrollView style={styles.container}>
-      <Text style={styles.title}>Nueva Visita</Text>
-
-      {/* IDENTIFICADOR (NUEVO) */}
-      <View style={styles.card}>
-        <Text>👤 Identificador (cédula o código de 6 dígitos):</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Ej: 1234567890 o 123456"
-          value={identificador}
-          onChangeText={setIdentificador}
-          keyboardType="numeric"
-          maxLength={10}
-        />
-      </View>
-
-      {/* SERVICIO */}
-      <View style={styles.card}>
-        <Text>📋 Servicio:</Text>
-        <Picker
-          selectedValue={servicioId}
-          onValueChange={(v) => setServicioId(v)}
-        >
-          <Picker.Item label="Selecciona un servicio..." value="" />
-          {servicios.map(s => (
-            <Picker.Item key={s.id} label={s.nombre} value={String(s.id)} />
-          ))}
-        </Picker>
-      </View>
-
-      {/* UBICACIÓN */}
-      <View style={styles.card}>
-        <Text>📍 Ubicación:</Text>
-        <Text>{ubicacion.dir}</Text>
-        <Text style={{ fontSize: 10 }}>
-          Lat: {ubicacion.lat} / Lng: {ubicacion.lng}
-        </Text>
-      </View>
-
-      {/* ACTIVIDADES */}
-      <View style={styles.card}>
-        <Text>⚙️ Actividades:</Text>
-        {actividades.map((item, index) => (
-          <View key={index} style={{ flexDirection: 'row', marginVertical: 3 }}>
-            <TextInput
-              placeholder="Descripción"
-              value={item.descripcion}
-              onChangeText={(text) => {
-                let newActs = [...actividades];
-                newActs[index].descripcion = text;
-                setActividades(newActs);
-              }}
-              style={[styles.input, { flex: 2 }]}
-            />
-            <TextInput
-              placeholder="Min"
-              value={item.tiempo}
-              onChangeText={(text) => {
-                let newActs = [...actividades];
-                newActs[index].tiempo = text;
-                setActividades(newActs);
-              }}
-              keyboardType="numeric"
-              style={[styles.input, { flex: 1 }]}
-            />
-          </View>
-        ))}
-        <Button
-          title="+ Agregar Actividad"
-          onPress={() =>
-            setActividades([...actividades, { descripcion: '', tiempo: '' }])
-          }
-        />
-      </View>
-
-      {/* NOVEDAD */}
-      <View style={styles.card}>
-        <Text>⚠️ Novedad:</Text>
-        <TextInput
-          placeholder="Tipo"
-          value={novedad.tipo}
-          onChangeText={(t) => setNovedad({ ...novedad, tipo: t })}
-          style={styles.input}
-        />
-        <TextInput
-          placeholder="Descripción"
-          value={novedad.descripcion}
-          onChangeText={(d) => setNovedad({ ...novedad, descripcion: d })}
-          style={styles.input}
-          multiline
-        />
-      </View>
-
-      {/* FOTOS */}
-      <View style={styles.card}>
-        <Text>📸 Fotos ({fotos.length})</Text>
-        <Button title="📷 Tomar Foto" onPress={tomarFoto} />
-        <ScrollView horizontal>
-          {fotos.map((base64, idx) => (
-            <Image
-              key={idx}
-              source={{ uri: `data:image/jpeg;base64,${base64}` }}
-              style={{ width: 80, height: 80, margin: 5 }}
-            />
-          ))}
-        </ScrollView>
-      </View>
-
-      {/* BOTÓN GUARDAR */}
-      {cargando ? (
-        <ActivityIndicator size="large" color="green" />
-      ) : (
-        <Button title="✅ Guardar Visita" onPress={enviarVisita} color="green" />
-      )}
-    </ScrollView>
-  );
-}
-
-// ============================================================
-// ESTILOS
-// ============================================================
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 20,
-    backgroundColor: '#f5f5f5'
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 20
-  },
-  card: {
-    backgroundColor: '#fff',
-    padding: 15,
-    borderRadius: 10,
-    marginBottom: 15,
-    elevation: 2
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    padding: 8,
-    borderRadius: 5,
-    marginVertical: 3
-  }
+const cloudinary = require('cloudinary').v2;
+cloudinary.config({
+  cloud_name: process.env.CLOUD_NAME,
+  api_key: process.env.API_KEY,
+  api_secret: process.env.API_SECRET,
+  secure: true
 });
+
+// ============================================================
+// MIDDLEWARE DE VERIFICACIÓN (opcional)
+// ============================================================
+const verificarToken = (req, res, next) => {
+    next();
+};
+
+// ============================================================
+// RUTA: REGISTRAR UNA VISITA COMPLETA (con identificador)
+// ============================================================
+router.post('/iniciar', verificarToken, async (req, res) => {
+    const pool = req.pool;
+    const {
+        tecnico_id,
+        identificador,
+        servicio_id,
+        latitud,
+        longitud,
+        direccion,
+        actividades,
+        novedades,
+        fotos
+    } = req.body;
+
+    // Validaciones
+    if (!tecnico_id || !identificador || !servicio_id) {
+        return res.status(400).json({ error: 'Faltan datos obligatorios (técnico, identificador, servicio)' });
+    }
+
+    try {
+        // 1️⃣ Buscar o crear el usuario por identificador
+        let usuario_id;
+        const userResult = await pool.query(
+            'SELECT id FROM usuarios WHERE identificador = $1',
+            [identificador]
+        );
+
+        if (userResult.rows.length > 0) {
+            usuario_id = userResult.rows[0].id;
+        } else {
+            const newUser = await pool.query(
+                `INSERT INTO usuarios (nombre, identificador, direccion, telefono)
+                 VALUES ($1, $2, $3, $4) RETURNING id`,
+                [
+                    `Usuario ${identificador}`,
+                    identificador,
+                    'Dirección pendiente',
+                    'Teléfono pendiente'
+                ]
+            );
+            usuario_id = newUser.rows[0].id;
+        }
+
+        // 2️⃣ Insertar la visita
+        const result = await pool.query(
+            `INSERT INTO visitas (tecnico_id, usuario_id, servicio_id, latitud_registro, longitud_registro, direccion_texto)
+             VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+            [tecnico_id, usuario_id, servicio_id, latitud, longitud, direccion]
+        );
+        const visitaId = result.rows[0].id;
+
+        // 3️⃣ Insertar actividades
+        if (actividades && Array.isArray(actividades)) {
+            for (let act of actividades) {
+                if (act.descripcion) {
+                    await pool.query(
+                        `INSERT INTO actividades (visita_id, descripcion, tiempo_empleado) VALUES ($1, $2, $3)`,
+                        [visitaId, act.descripcion, act.tiempo || 0]
+                    );
+                }
+            }
+        }
+
+        // 4️⃣ Insertar novedades
+        if (novedades && novedades.descripcion) {
+            await pool.query(
+                `INSERT INTO novedades (visita_id, tipo, descripcion) VALUES ($1, $2, $3)`,
+                [visitaId, novedades.tipo || 'General', novedades.descripcion]
+            );
+        }
+
+        // 5️⃣ Subir fotos a Cloudinary
+        if (fotos && Array.isArray(fotos)) {
+            for (let base64 of fotos) {
+                try {
+                    const resultCloud = await cloudinary.uploader.upload(`data:image/jpeg;base64,${base64}`, {
+                        folder: 'visitas',
+                        resource_type: 'image'
+                    });
+                    await pool.query(
+                        `INSERT INTO fotos (visita_id, url) VALUES ($1, $2)`,
+                        [visitaId, resultCloud.secure_url]
+                    );
+                } catch (err) {
+                    console.error('❌ Error subiendo a Cloudinary:', err.message);
+                }
+            }
+        }
+
+        res.status(201).json({ success: true, visita_id: visitaId, message: 'Visita registrada' });
+
+    } catch (error) {
+        console.error('❌ Error al guardar la visita:', error);
+        res.status(500).json({ error: 'Error al guardar la visita' });
+    }
+});
+
+// ============================================================
+// RUTA: OBTENER VISITAS DE UN TÉCNICO
+// ============================================================
+router.get('/tecnico/:id', verificarToken, async (req, res) => {
+    const pool = req.pool;
+    const { id } = req.params;
+
+    try {
+        const result = await pool.query(
+            `SELECT v.*, u.nombre as usuario_nombre, s.nombre as servicio_nombre 
+             FROM visitas v 
+             JOIN usuarios u ON v.usuario_id = u.id 
+             JOIN servicios s ON v.servicio_id = s.id 
+             WHERE v.tecnico_id = $1 
+             ORDER BY v.fecha_inicio DESC`,
+            [id]
+        );
+        res.json(result.rows);
+    } catch (error) {
+        console.error('❌ Error al obtener visitas:', error);
+        res.status(500).json({ error: 'Error al obtener visitas' });
+    }
+});
+
+// ============================================================
+// RUTA: OBTENER LISTA DE SERVICIOS
+// ============================================================
+router.get('/servicios', verificarToken, async (req, res) => {
+    const pool = req.pool;
+    try {
+        const result = await pool.query('SELECT id, nombre, descripcion FROM servicios ORDER BY nombre');
+        res.json(result.rows);
+    } catch (error) {
+        console.error('❌ Error al obtener servicios:', error);
+        res.status(500).json({ error: 'Error al obtener servicios' });
+    }
+});
+
+module.exports = router;
