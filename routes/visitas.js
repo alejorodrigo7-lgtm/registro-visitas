@@ -157,4 +157,26 @@ router.get('/servicios', verificarToken, async (req, res) => {
     }
 });
 
+// ============================================================
+// NUEVA RUTA: OBTENER USUARIO POR IDENTIFICADOR
+// ============================================================
+router.get('/usuario/:identificador', verificarToken, async (req, res) => {
+    const pool = req.pool;
+    const { identificador } = req.params;
+
+    try {
+        const result = await pool.query(
+            'SELECT id, nombre, direccion, telefono FROM usuarios WHERE identificador = $1',
+            [identificador]
+        );
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Usuario no encontrado' });
+        }
+        res.json(result.rows[0]);
+    } catch (error) {
+        console.error('❌ Error al buscar usuario:', error);
+        res.status(500).json({ error: 'Error al buscar usuario' });
+    }
+});
+
 module.exports = router;
