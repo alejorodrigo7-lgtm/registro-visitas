@@ -36,7 +36,6 @@ router.post('/iniciar', verificarToken, async (req, res) => {
         fotos
     } = req.body;
 
-    // Validaciones
     if (!tecnico_id || !identificador || !servicio_id) {
         return res.status(400).json({ error: 'Faltan datos obligatorios (técnico, identificador, servicio)' });
     }
@@ -158,7 +157,7 @@ router.get('/servicios', verificarToken, async (req, res) => {
 });
 
 // ============================================================
-// NUEVA RUTA: OBTENER USUARIO POR IDENTIFICADOR
+// RUTA: OBTENER USUARIO POR IDENTIFICADOR (CORREGIDA CON barrio)
 // ============================================================
 router.get('/usuario/:identificador', verificarToken, async (req, res) => {
     const pool = req.pool;
@@ -166,7 +165,7 @@ router.get('/usuario/:identificador', verificarToken, async (req, res) => {
 
     try {
         const result = await pool.query(
-            'SELECT id, nombre, direccion, telefono FROM usuarios WHERE identificador = $1',
+            'SELECT id, nombre, barrio, direccion, telefono FROM usuarios WHERE identificador = $1',
             [identificador]
         );
         if (result.rows.length === 0) {
