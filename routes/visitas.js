@@ -13,20 +13,20 @@ cloudinary.config({
 });
 
 // ============================================================
-// MIDDLEWARE DE VERIFICACIÓN (opcional)
+// MIDDLEWARE DE VERIFICACIÓN (opcional, para pruebas)
 // ============================================================
 const verificarToken = (req, res, next) => {
     next();
 };
 
 // ============================================================
-// RUTA: REGISTRAR UNA VISITA COMPLETA
+// RUTA: REGISTRAR UNA VISITA COMPLETA (con identificador)
 // ============================================================
 router.post('/iniciar', verificarToken, async (req, res) => {
     const pool = req.pool;
     const {
         tecnico_id,
-        usuario_id,
+        identificador,      // ← NUEVO: cédula o código de 6 dígitos
         servicio_id,
         latitud,
         longitud,
@@ -36,12 +36,38 @@ router.post('/iniciar', verificarToken, async (req, res) => {
         fotos
     } = req.body;
 
-    if (!tecnico_id || !usuario_id || !servicio_id) {
-        return res.status(400).json({ error: 'Faltan datos obligatorios' });
+    // Validaciones
+    if (!tecnico_id || !identificador || !servicio_id) {
+        return res.status(400).json({ error: 'Faltan datos obligatorios (técnico, identificador, servicio)' });
     }
 
     try {
-        // 1. Insertar la visita
+        // 1️⃣ Buscar o crear el usuario por identificador
+        let usuario_id;
+        const userResult = await pool.query(
+            'SELECT id FROM usuarios WHERE identificador = $1',
+            [identificador]
+        );
+
+        if (userResult.rows.length > 0) {
+            // Usuario existe → usamos su ID
+            usuario_id = userResult.rows[0].id;
+        } else {
+            // Usuario no existe → lo creamos automáticamente
+            const newUser = await pool.query(
+                `INSERT INTO usuarios (nombre, identificador, direccion, telefono)
+                 VALUES ($1, $2, $3, $4) RETURNING id`,
+                [
+                    `Usuario ${identificador}`,   // nombre genérico
+                    identificador,
+                    'Dirección pendiente',        // valor por defecto
+                    'Teléfono pendiente'          // valor por defecto
+                ]
+            );
+            usuario_id = newUser.rows[0].id;
+        }
+
+        // 2️⃣ Insertar la visita con el usuario_id obtenido
         const result = await pool.query(
             `INSERT INTO visitas (tecnico_id, usuario_id, servicio_id, latitud_registro, longitud_registro, direccion_texto)
              VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
@@ -49,7 +75,7 @@ router.post('/iniciar', verificarToken, async (req, res) => {
         );
         const visitaId = result.rows[0].id;
 
-        // 2. Insertar actividades
+        // 3️⃣ Insertar actividades
         if (actividades && Array.isArray(actividades)) {
             for (let act of actividades) {
                 if (act.descripcion) {
@@ -61,7 +87,7 @@ router.post('/iniciar', verificarToken, async (req, res) => {
             }
         }
 
-        // 3. Insertar novedades
+        // 4️⃣ Insertar novedades
         if (novedades && novedades.descripcion) {
             await pool.query(
                 `INSERT INTO novedades (visita_id, tipo, descripcion) VALUES ($1, $2, $3)`,
@@ -69,39 +95,22 @@ router.post('/iniciar', verificarToken, async (req, res) => {
             );
         }
 
-        // ============================================================
-        // 4. SUBIR FOTOS A CLOUDINARY CON LOGS DE DEPURACIÓN
-        // ============================================================
-        console.log('📸 Entrando al bloque de fotos...');
-
+        // 5️⃣ Subir fotos a Cloudinary
         if (fotos && Array.isArray(fotos)) {
-            console.log(`📸 Se recibieron ${fotos.length} fotos.`);
-            
-            for (let i = 0; i < fotos.length; i++) {
-                const base64 = fotos[i];
-                console.log(`📸 Procesando foto ${i + 1}...`);
-                
+            for (let base64 of fotos) {
                 try {
-                    console.log('📸 Subiendo a Cloudinary...');
-                    const result = await cloudinary.uploader.upload(`data:image/jpeg;base64,${base64}`, {
+                    const resultCloud = await cloudinary.uploader.upload(`data:image/jpeg;base64,${base64}`, {
                         folder: 'visitas',
                         resource_type: 'image'
                     });
-                    console.log('✅ Cloudinary OK:', result.secure_url);
-                    
                     await pool.query(
                         `INSERT INTO fotos (visita_id, url) VALUES ($1, $2)`,
-                        [visitaId, result.secure_url]
+                        [visitaId, resultCloud.secure_url]
                     );
-                    console.log('✅ URL guardada en BD');
-                    
                 } catch (err) {
                     console.error('❌ Error subiendo a Cloudinary:', err.message);
-                    console.error('❌ Detalles del error:', err);
                 }
             }
-        } else {
-            console.log('📸 No se recibieron fotos o no es un array.');
         }
 
         res.status(201).json({ success: true, visita_id: visitaId, message: 'Visita registrada' });
@@ -137,7 +146,7 @@ router.get('/tecnico/:id', verificarToken, async (req, res) => {
 });
 
 // ============================================================
-// RUTA: OBTENER LISTA DE USUARIOS
+// RUTA: OBTENER LISTA DE USUARIOS (ya no se usa, pero la dejamos)
 // ============================================================
 router.get('/usuarios', verificarToken, async (req, res) => {
     const pool = req.pool;
