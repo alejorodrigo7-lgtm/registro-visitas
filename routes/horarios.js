@@ -2,12 +2,13 @@ const express = require('express');
 const router = express.Router();
 
 // ============================================================
-// 1. CONFIGURAR HORARIO DE TRABAJO (Admin/Jefe)
+// CONFIGURAR HORARIO (Admin/Jefe)
 // ============================================================
 router.post('/configurar', async (req, res) => {
     const pool = req.pool;
     const {
         tecnico_id,
+        tipo_usuario,
         hora_entrada,
         hora_salida,
         hora_descanso_inicio,
@@ -31,12 +32,13 @@ router.post('/configurar', async (req, res) => {
             return res.status(404).json({ error: 'Técnico no encontrado' });
         }
 
-        // Insertar o actualizar horario
+        // Insertar o actualizar horario con tipo_usuario
         await pool.query(
             `INSERT INTO horarios_trabajo 
-             (tecnico_id, hora_entrada, hora_salida, hora_descanso_inicio, hora_descanso_fin, tiempo_alerta_minutos, activo)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             (tecnico_id, tipo_usuario, hora_entrada, hora_salida, hora_descanso_inicio, hora_descanso_fin, tiempo_alerta_minutos, activo)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
              ON CONFLICT (tecnico_id) DO UPDATE SET
+             tipo_usuario = EXCLUDED.tipo_usuario,
              hora_entrada = EXCLUDED.hora_entrada,
              hora_salida = EXCLUDED.hora_salida,
              hora_descanso_inicio = EXCLUDED.hora_descanso_inicio,
@@ -44,7 +46,7 @@ router.post('/configurar', async (req, res) => {
              tiempo_alerta_minutos = EXCLUDED.tiempo_alerta_minutos,
              activo = EXCLUDED.activo,
              updated_at = NOW()`,
-            [tecnico_id, hora_entrada, hora_salida, hora_descanso_inicio, hora_descanso_fin, tiempo_alerta_minutos, activo]
+            [tecnico_id, tipo_usuario, hora_entrada, hora_salida, hora_descanso_inicio, hora_descanso_fin, tiempo_alerta_minutos, activo]
         );
 
         res.json({ success: true, message: 'Horario configurado correctamente' });
@@ -56,7 +58,7 @@ router.post('/configurar', async (req, res) => {
 });
 
 // ============================================================
-// 2. OBTENER HORARIO DE UN TÉCNICO
+// OBTENER HORARIO DE UN TÉCNICO
 // ============================================================
 router.get('/:tecnico_id', async (req, res) => {
     const pool = req.pool;
@@ -81,17 +83,17 @@ router.get('/:tecnico_id', async (req, res) => {
 });
 
 // ============================================================
-// 3. OBTENER TODOS LOS HORARIOS (Admin/Jefe)
+// OBTENER TODOS LOS HORARIOS (Admin/Jefe)
 // ============================================================
 router.get('/', async (req, res) => {
     const pool = req.pool;
 
     try {
         const result = await pool.query(
-            `SELECT h.*, t.nombre as tecnico_nombre 
+            `SELECT h.*, t.nombre as tecnico_nombre, t.email as tecnico_email
              FROM horarios_trabajo h
              JOIN tecnicos t ON h.tecnico_id = t.id
-             ORDER BY t.nombre`
+             ORDER BY h.tipo_usuario, t.nombre`
         );
         res.json(result.rows);
 
