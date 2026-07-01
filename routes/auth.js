@@ -4,7 +4,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 
 // ============================================================
-// LOGIN (con verificación de cambio de contraseña)
+// 1. LOGIN (con verificación de cambio de contraseña)
 // ============================================================
 router.post('/login', async (req, res) => {
     const { email, password } = req.body;
@@ -22,13 +22,11 @@ router.post('/login', async (req, res) => {
 
         const tecnico = result.rows[0];
 
-        // Verificar contraseña con bcrypt
         const passwordValida = await bcrypt.compare(password, tecnico.password_hash);
         if (!passwordValida) {
             return res.status(401).json({ error: 'Credenciales inválidas' });
         }
 
-        // Generar token
         const token = jwt.sign(
             { 
                 id: tecnico.id, 
@@ -60,7 +58,7 @@ router.post('/login', async (req, res) => {
 });
 
 // ============================================================
-// CAMBIAR CONTRASEÑA
+// 2. CAMBIAR CONTRASEÑA
 // ============================================================
 router.post('/cambiar-password', async (req, res) => {
     const { tecnico_id, password_actual, password_nuevo } = req.body;
@@ -107,7 +105,7 @@ router.post('/cambiar-password', async (req, res) => {
 });
 
 // ============================================================
-// CREAR USUARIO (SOLO ADMINISTRADOR)
+// 3. CREAR USUARIO (SOLO ADMINISTRADOR)
 // ============================================================
 router.post('/crear-usuario', async (req, res) => {
     const { nombre, email, password, rol, creador_id } = req.body;
@@ -154,6 +152,22 @@ router.post('/crear-usuario', async (req, res) => {
     } catch (error) {
         console.error('❌ Error al crear usuario:', error);
         res.status(500).json({ error: 'Error al crear usuario' });
+    }
+});
+
+// ============================================================
+// 4. OBTENER TODOS LOS TÉCNICOS (NUEVO ENDPOINT)
+// ============================================================
+router.get('/tecnicos', async (req, res) => {
+    const pool = req.pool;
+    try {
+        const result = await pool.query(
+            'SELECT id, nombre, email, rol FROM tecnicos ORDER BY nombre'
+        );
+        res.json(result.rows);
+    } catch (error) {
+        console.error('❌ Error al obtener técnicos:', error);
+        res.status(500).json({ error: 'Error al obtener técnicos' });
     }
 });
 
