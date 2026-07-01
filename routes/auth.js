@@ -22,11 +22,13 @@ router.post('/login', async (req, res) => {
 
         const tecnico = result.rows[0];
 
+        // Verificar contraseña con bcrypt
         const passwordValida = await bcrypt.compare(password, tecnico.password_hash);
         if (!passwordValida) {
             return res.status(401).json({ error: 'Credenciales inválidas' });
         }
 
+        // Generar token
         const token = jwt.sign(
             { 
                 id: tecnico.id, 
@@ -156,7 +158,7 @@ router.post('/crear-usuario', async (req, res) => {
 });
 
 // ============================================================
-// 4. OBTENER TODOS LOS TÉCNICOS (NUEVO ENDPOINT)
+// 4. OBTENER TODOS LOS TÉCNICOS (para selectores)
 // ============================================================
 router.get('/tecnicos', async (req, res) => {
     const pool = req.pool;
@@ -168,6 +170,58 @@ router.get('/tecnicos', async (req, res) => {
     } catch (error) {
         console.error('❌ Error al obtener técnicos:', error);
         res.status(500).json({ error: 'Error al obtener técnicos' });
+    }
+});
+
+// ============================================================
+// 5. REGISTRAR TOKEN DE NOTIFICACIONES PUSH
+// ============================================================
+router.post('/registrar-token', async (req, res) => {
+    const pool = req.pool;
+    const { tecnico_id, token } = req.body;
+
+    if (!tecnico_id || !token) {
+        return res.status(400).json({ error: 'Faltan datos (tecnico_id y token son requeridos)' });
+    }
+
+    try {
+        // Verificar que el técnico exista
+        const tecnicoExiste = await pool.query(
+            'SELECT id FROM tecnicos WHERE id = $1',
+            [tecnico_id]
+        );
+        if (tecnicoExiste.rows.length === 0) {
+            return res.status(404).json({ error: 'Técnico no encontrado' });
+        }
+
+        // Crear tabla si no existe
+        await pool.query(
+            `CREATE TABLE IF NOT EXISTS push_tokens (
+                id SERIAL PRIMARY KEY,
+                tecnico_id INTEGER REFERENCES tecnicos(id) ON DELETE CASCADE,
+                token TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE(tecnico_id)
+            )`
+        );
+
+        // Insertar o actualizar token
+        await pool.query(
+            `INSERT INTO push_tokens (tecnico_id, token, updated_at)
+             VALUES ($1, $2, NOW())
+             ON CONFLICT (tecnico_id) DO UPDATE SET 
+                token = EXCLUDED.token,
+                updated_at = NOW()`,
+            [tecnico_id, token]
+        );
+
+        console.log(`✅ Token registrado para técnico ID: ${tecnico_id}`);
+        res.json({ success: true, message: 'Token registrado correctamente' });
+
+    } catch (error) {
+        console.error('❌ Error al registrar token:', error);
+        res.status(500).json({ error: 'Error al registrar token' });
     }
 });
 
