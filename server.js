@@ -42,9 +42,13 @@ app.use((req, res, next) => {
 
 const authRoutes = require('./routes/auth');
 const visitasRoutes = require('./routes/visitas');
+const horariosRoutes = require('./routes/horarios');
+const alertasRoutes = require('./routes/alertas');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/visitas', visitasRoutes);
+app.use('/api/horarios', horariosRoutes);
+app.use('/api/alertas', alertasRoutes);
 
 app.get('/api/ping', (req, res) => {
     res.json({ message: '🏓 Pong! El servidor está funcionando.' });
