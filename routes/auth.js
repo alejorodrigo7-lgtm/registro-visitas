@@ -4,7 +4,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 
 // ============================================================
-// 1. LOGIN (con verificación de cambio de contraseña)
+// 1. LOGIN
 // ============================================================
 router.post('/login', async (req, res) => {
     const { email, password } = req.body;
@@ -22,13 +22,11 @@ router.post('/login', async (req, res) => {
 
         const tecnico = result.rows[0];
 
-        // Verificar contraseña con bcrypt
         const passwordValida = await bcrypt.compare(password, tecnico.password_hash);
         if (!passwordValida) {
             return res.status(401).json({ error: 'Credenciales inválidas' });
         }
 
-        // Generar token
         const token = jwt.sign(
             { 
                 id: tecnico.id, 
@@ -107,7 +105,7 @@ router.post('/cambiar-password', async (req, res) => {
 });
 
 // ============================================================
-// 3. CREAR USUARIO (SOLO ADMINISTRADOR)
+// 3. CREAR USUARIO (SOLO ADMIN)
 // ============================================================
 router.post('/crear-usuario', async (req, res) => {
     const { nombre, email, password, rol, creador_id } = req.body;
@@ -158,7 +156,7 @@ router.post('/crear-usuario', async (req, res) => {
 });
 
 // ============================================================
-// 4. OBTENER TODOS LOS TÉCNICOS (para selectores)
+// 4. OBTENER TÉCNICOS
 // ============================================================
 router.get('/tecnicos', async (req, res) => {
     const pool = req.pool;
@@ -174,7 +172,7 @@ router.get('/tecnicos', async (req, res) => {
 });
 
 // ============================================================
-// 5. REGISTRAR TOKEN DE NOTIFICACIONES PUSH
+// 5. REGISTRAR TOKEN DE NOTIFICACIONES
 // ============================================================
 router.post('/registrar-token', async (req, res) => {
     const pool = req.pool;
@@ -185,7 +183,6 @@ router.post('/registrar-token', async (req, res) => {
     }
 
     try {
-        // Verificar que el técnico exista
         const tecnicoExiste = await pool.query(
             'SELECT id FROM tecnicos WHERE id = $1',
             [tecnico_id]
@@ -194,7 +191,6 @@ router.post('/registrar-token', async (req, res) => {
             return res.status(404).json({ error: 'Técnico no encontrado' });
         }
 
-        // Crear tabla si no existe
         await pool.query(
             `CREATE TABLE IF NOT EXISTS push_tokens (
                 id SERIAL PRIMARY KEY,
@@ -206,7 +202,6 @@ router.post('/registrar-token', async (req, res) => {
             )`
         );
 
-        // Insertar o actualizar token
         await pool.query(
             `INSERT INTO push_tokens (tecnico_id, token, updated_at)
              VALUES ($1, $2, NOW())
