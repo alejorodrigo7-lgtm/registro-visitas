@@ -112,24 +112,106 @@ router.get('/configuraciones', async (req, res) => {
 });
 
 // ============================================================
-// 5. ACTUALIZAR CONFIGURACIÓN DE ALERTA
+// 5. ACTUALIZAR CONFIGURACIÓN COMPLETA (PUT)
 // ============================================================
 router.put('/configuracion/:id', async (req, res) => {
     const pool = req.pool;
     const { id } = req.params;
-    const { tiempo_inactividad, activo } = req.body;
+    const { 
+        hora_entrada, 
+        hora_salida, 
+        hora_descanso_inicio, 
+        hora_descanso_fin, 
+        tiempo_inactividad, 
+        activo 
+    } = req.body;
+
+    // Validación básica
+    if (!hora_entrada || !hora_salida) {
+        return res.status(400).json({ error: 'Faltan datos obligatorios (hora_entrada, hora_salida)' });
+    }
 
     try {
+        // Verificar que la configuración exista
+        const existe = await pool.query(
+            'SELECT id FROM horarios_trabajo WHERE id = $1',
+            [id]
+        );
+        if (existe.rows.length === 0) {
+            return res.status(404).json({ error: 'Configuración no encontrada' });
+        }
+
+        // Actualizar todos los campos
         await pool.query(
             `UPDATE horarios_trabajo 
-             SET tiempo_alerta_minutos = $1, activo = $2, updated_at = NOW()
-             WHERE id = $3`,
-            [tiempo_inactividad, activo, id]
+             SET 
+                hora_entrada = $1, 
+                hora_salida = $2, 
+                hora_descanso_inicio = $3, 
+                hora_descanso_fin = $4, 
+                tiempo_alerta_minutos = $5, 
+                activo = $6,
+                updated_at = NOW()
+             WHERE id = $7`,
+            [hora_entrada, hora_salida, hora_descanso_inicio, hora_descanso_fin, tiempo_inactividad, activo, id]
         );
-        res.json({ success: true });
+
+        // Obtener la configuración actualizada
+        const result = await pool.query(
+            `SELECT 
+                h.id,
+                h.tecnico_id,
+                t.nombre as tecnico_nombre,
+                t.email as tecnico_email,
+                h.tipo_usuario,
+                h.hora_entrada,
+                h.hora_salida,
+                h.hora_descanso_inicio,
+                h.hora_descanso_fin,
+                h.tiempo_alerta_minutos,
+                h.activo,
+                h.created_at,
+                h.updated_at
+             FROM horarios_trabajo h
+             JOIN tecnicos t ON h.tecnico_id = t.id
+             WHERE h.id = $1`,
+            [id]
+        );
+
+        res.json({ 
+            success: true, 
+            message: 'Configuración actualizada correctamente',
+            configuracion: result.rows[0]
+        });
+
     } catch (error) {
         console.error('❌ Error al actualizar configuración:', error);
         res.status(500).json({ error: 'Error al actualizar configuración' });
+    }
+});
+
+// ============================================================
+// 6. ELIMINAR CONFIGURACIÓN (DELETE) - Opcional
+// ============================================================
+router.delete('/configuracion/:id', async (req, res) => {
+    const pool = req.pool;
+    const { id } = req.params;
+
+    try {
+        const result = await pool.query(
+            'DELETE FROM horarios_trabajo WHERE id = $1 RETURNING id',
+            [id]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Configuración no encontrada' });
+        }
+
+        res.json({ success: true, message: 'Configuración eliminada correctamente' });
+
+    } catch (error) {
+        console.error('❌ Error al eliminar configuración:', error);
+        res.status(500).json({ error: 'Error al eliminar configuración' });
     }
 });
 
