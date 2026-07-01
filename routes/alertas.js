@@ -80,3 +80,43 @@ router.post('/', async (req, res) => {
 });
 
 module.exports = router;
+// ============================================================
+// 4. OBTENER CONFIGURACIONES DE ALERTAS
+// ============================================================
+router.get('/configuraciones', async (req, res) => {
+    const pool = req.pool;
+    try {
+        const result = await pool.query(
+            `SELECT a.*, t.nombre as tecnico_nombre 
+             FROM alertas a
+             JOIN tecnicos t ON a.tecnico_id = t.id
+             ORDER BY a.tipo_usuario, t.nombre`
+        );
+        res.json(result.rows);
+    } catch (error) {
+        console.error('❌ Error al obtener configuraciones:', error);
+        res.status(500).json({ error: 'Error al obtener configuraciones' });
+    }
+});
+
+// ============================================================
+// 5. ACTUALIZAR CONFIGURACIÓN DE ALERTA
+// ============================================================
+router.put('/configuracion/:id', async (req, res) => {
+    const pool = req.pool;
+    const { id } = req.params;
+    const { tiempo_inactividad, activo } = req.body;
+
+    try {
+        await pool.query(
+            `UPDATE alertas 
+             SET tiempo_inactividad = $1, activo = $2 
+             WHERE id = $3`,
+            [tiempo_inactividad, activo, id]
+        );
+        res.json({ success: true });
+    } catch (error) {
+        console.error('❌ Error al actualizar configuración:', error);
+        res.status(500).json({ error: 'Error al actualizar configuración' });
+    }
+});
