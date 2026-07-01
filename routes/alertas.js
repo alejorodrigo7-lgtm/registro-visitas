@@ -79,18 +79,30 @@ router.post('/', async (req, res) => {
     }
 });
 
-module.exports = router;
 // ============================================================
-// 4. OBTENER CONFIGURACIONES DE ALERTAS
+// 4. OBTENER CONFIGURACIONES DE HORARIOS (para Alertas)
 // ============================================================
 router.get('/configuraciones', async (req, res) => {
     const pool = req.pool;
     try {
         const result = await pool.query(
-            `SELECT a.*, t.nombre as tecnico_nombre 
-             FROM alertas a
-             JOIN tecnicos t ON a.tecnico_id = t.id
-             ORDER BY a.tipo_usuario, t.nombre`
+            `SELECT 
+                h.id,
+                h.tecnico_id,
+                t.nombre as tecnico_nombre,
+                t.email as tecnico_email,
+                h.tipo_usuario,
+                h.hora_entrada,
+                h.hora_salida,
+                h.hora_descanso_inicio,
+                h.hora_descanso_fin,
+                h.tiempo_alerta_minutos,
+                h.activo,
+                h.created_at,
+                h.updated_at
+             FROM horarios_trabajo h
+             JOIN tecnicos t ON h.tecnico_id = t.id
+             ORDER BY h.tipo_usuario, t.nombre`
         );
         res.json(result.rows);
     } catch (error) {
@@ -109,8 +121,8 @@ router.put('/configuracion/:id', async (req, res) => {
 
     try {
         await pool.query(
-            `UPDATE alertas 
-             SET tiempo_inactividad = $1, activo = $2 
+            `UPDATE horarios_trabajo 
+             SET tiempo_alerta_minutos = $1, activo = $2, updated_at = NOW()
              WHERE id = $3`,
             [tiempo_inactividad, activo, id]
         );
@@ -120,3 +132,5 @@ router.put('/configuracion/:id', async (req, res) => {
         res.status(500).json({ error: 'Error al actualizar configuración' });
     }
 });
+
+module.exports = router;
