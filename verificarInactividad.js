@@ -1,7 +1,5 @@
 const { Pool } = require('pg');
-const { 
-    enviarNotificacionesMultiples
-} = require('../services/notificaciones');
+const { enviarNotificacionesMultiples } = require('./backend/services/notificaciones');
 
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
