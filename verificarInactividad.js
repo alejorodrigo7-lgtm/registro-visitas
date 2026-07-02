@@ -7,14 +7,25 @@ const pool = new Pool({
 });
 
 // ============================================================
+// FUNCIÓN PARA OBTENER HORA ACTUAL EN ECUADOR (UTC-5)
+// ============================================================
+const getHoraEcuador = () => {
+    const now = new Date();
+    // Convertir a hora de Ecuador (UTC-5)
+    const ecuadorTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Guayaquil' }));
+    return {
+        hora: ecuadorTime.toTimeString().slice(0, 5),
+        fecha: ecuadorTime.toISOString().slice(0, 10),
+        now: ecuadorTime
+    };
+};
+
+// ============================================================
 // FUNCIÓN PRINCIPAL DE VERIFICACIÓN
 // ============================================================
 const verificarInactividad = async () => {
-    console.log(`🔍 Verificando inactividad - ${new Date().toLocaleString()}`);
-
-    const now = new Date();
-    const horaActual = now.toTimeString().slice(0, 5);
-    const fechaActual = now.toISOString().slice(0, 10);
+    const { hora: horaActual, fecha: fechaActual, now } = getHoraEcuador();
+    console.log(`🔍 Verificando inactividad - ${now.toLocaleString('es-EC', { timeZone: 'America/Guayaquil' })}`);
 
     try {
         // ============================================================
@@ -82,7 +93,7 @@ const verificarInactividad = async () => {
 
             console.log(`📊 Última visita: ${ultima || 'Ninguna'}`);
             console.log(`⏱️ Tiempo de alerta: ${h.tiempo_alerta_minutos} minutos`);
-            console.log(`⏰ Límite: ${tiempoLimite.toLocaleTimeString()}`);
+            console.log(`⏰ Límite: ${tiempoLimite.toLocaleTimeString('es-EC', { timeZone: 'America/Guayaquil' })}`);
 
             // ============================================================
             // 2.4 VERIFICAR SI DEBE GENERAR ALERTA
@@ -197,7 +208,7 @@ const verificarInactividad = async () => {
             }
         }
 
-        console.log(`\n✅ Verificación completada - ${new Date().toLocaleString()}`);
+        console.log(`\n✅ Verificación completada - ${new Date().toLocaleString('es-EC', { timeZone: 'America/Guayaquil' })}`);
 
     } catch (error) {
         console.error('❌ Error en verificación de inactividad:', error);
@@ -212,6 +223,7 @@ const INTERVALO_MS = 60000; // 1 minuto
 
 console.log(`🚀 Iniciando servicio de verificación de inactividad`);
 console.log(`⏱️  Intervalo: ${INTERVALO_MS / 1000} segundos`);
+console.log(`🌎 Zona horaria: America/Guayaquil (UTC-5)`);
 
 // Ejecutar inmediatamente al iniciar
 verificarInactividad();
