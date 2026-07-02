@@ -90,7 +90,7 @@ pool.connect((err, client, release) => {
 // ============================================================
 if (process.env.NODE_ENV !== 'test') {
     try {
-        const { verificarInactividad } = require('./backend/scripts/verificarInactividad');
+        const { verificarInactividad } = require('./verificarInactividad');
         // Ejecutar inmediatamente al iniciar
         verificarInactividad();
         // Programar ejecución cada 60 segundos
