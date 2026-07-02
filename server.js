@@ -85,19 +85,3 @@ pool.connect((err, client, release) => {
     }
 });
 
-// ============================================================
-// 8. INICIAR VERIFICACIÓN DE INACTIVIDAD
-// ============================================================
-if (process.env.NODE_ENV !== 'test') {
-    try {
-        const { verificarInactividad } = require('./verificarInactividad');
-        // Ejecutar inmediatamente al iniciar
-        verificarInactividad();
-        // Programar ejecución cada 60 segundos
-        setInterval(verificarInactividad, 60000);
-        console.log('⏰ Servicio de verificación de inactividad iniciado');
-    } catch (error) {
-        console.error('❌ Error al iniciar verificación de inactividad:', error.message);
-        console.error('❌ Detalles:', error.stack);
-    }
-}
