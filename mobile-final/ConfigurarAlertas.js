@@ -9,55 +9,79 @@ import {
   ActivityIndicator,
   Switch,
   TextInput,
-  Modal
+  Modal,
+  ScrollView,
+  Button
 } from 'react-native';
 import axios from 'axios';
-import { Picker } from '@react-native-picker/picker';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 const API_URL = 'https://registro-visitas-production.up.railway.app/api';
 
 export default function ConfigurarAlertas({ route, navigation }) {
   const { tecnicoId, token, role } = route.params || {};
-  const [alertas, setAlertas] = useState([]);
-  const [cargando, setCargando] = useState(true);
-  const [filtro, setFiltro] = useState('todas'); // 'todas', 'tecnicos', 'coordinadores'
-  const [modalVisible, setModalVisible] = useState(false);
-  const [alertaEditando, setAlertaEditando] = useState(null);
-  const [tiempoEditando, setTiempoEditando] = useState('');
-  const [activoEditando, setActivoEditando] = useState(true);
 
   // ============================================================
-  // 1. CARGAR ALERTAS
+  // VERIFICAR ACCESO - SOLO ADMIN Y JEFE
   // ============================================================
   useEffect(() => {
-    cargarAlertas();
+    if (role !== 'admin' && role !== 'jefe') {
+      Alert.alert('Acceso denegado', 'Solo administradores y jefes pueden configurar alertas');
+      navigation.goBack();
+    }
   }, []);
 
-  const cargarAlertas = async () => {
+  // ============================================================
+  // ESTADOS
+  // ============================================================
+  const [configuraciones, setConfiguraciones] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [filtro, setFiltro] = useState('todas');
+  const [modalVisible, setModalVisible] = useState(false);
+  const [configEditando, setConfigEditando] = useState(null);
+  const [horaEntrada, setHoraEntrada] = useState(new Date());
+  const [horaSalida, setHoraSalida] = useState(new Date());
+  const [horaDescansoInicio, setHoraDescansoInicio] = useState(new Date());
+  const [horaDescansoFin, setHoraDescansoFin] = useState(new Date());
+  const [tiempoEditando, setTiempoEditando] = useState('');
+  const [activoEditando, setActivoEditando] = useState(true);
+  const [mostrarPicker, setMostrarPicker] = useState(null);
+
+  // ============================================================
+  // CARGAR CONFIGURACIONES
+  // ============================================================
+  useEffect(() => {
+    cargarConfiguraciones();
+  }, []);
+
+  const cargarConfiguraciones = async () => {
     setCargando(true);
     try {
       const config = { headers: { Authorization: `Bearer ${token}` } };
       const response = await axios.get(`${API_URL}/alertas/configuraciones`, config);
-      setAlertas(response.data);
+      setConfiguraciones(response.data);
     } catch (error) {
-      console.error('❌ Error al cargar alertas:', error);
-      Alert.alert('Error', 'No se pudieron cargar las configuraciones de alertas');
+      Alert.alert('Error', 'No se pudieron cargar las configuraciones');
     } finally {
       setCargando(false);
     }
   };
 
   // ============================================================
-  // 2. GUARDAR CONFIGURACIÓN DE ALERTA
+  // GUARDAR CONFIGURACIÓN
   // ============================================================
   const guardarConfiguracion = async () => {
-    if (!alertaEditando) return;
+    if (!configEditando) return;
 
     try {
       const config = { headers: { Authorization: `Bearer ${token}` } };
       await axios.put(
-        `${API_URL}/alertas/configuracion/${alertaEditando.id}`,
+        `${API_URL}/alertas/configuracion/${configEditando.id}`,
         {
+          hora_entrada: horaEntrada.toTimeString().slice(0, 5),
+          hora_salida: horaSalida.toTimeString().slice(0, 5),
+          hora_descanso_inicio: horaDescansoInicio.toTimeString().slice(0, 5),
+          hora_descanso_fin: horaDescansoFin.toTimeString().slice(0, 5),
           tiempo_inactividad: parseInt(tiempoEditando),
           activo: activoEditando
         },
@@ -66,15 +90,14 @@ export default function ConfigurarAlertas({ route, navigation }) {
 
       Alert.alert('✅ Éxito', 'Configuración actualizada correctamente');
       setModalVisible(false);
-      cargarAlertas();
+      cargarConfiguraciones();
     } catch (error) {
-      console.error('❌ Error al guardar configuración:', error);
       Alert.alert('Error', 'No se pudo guardar la configuración');
     }
   };
 
   // ============================================================
-  // 3. ELIMINAR CONFIGURACIÓN (desactivar)
+  // CAMBIAR ESTADO ACTIVO
   // ============================================================
   const toggleActivo = async (id, estadoActual) => {
     try {
@@ -84,24 +107,37 @@ export default function ConfigurarAlertas({ route, navigation }) {
         { activo: !estadoActual },
         config
       );
-      cargarAlertas();
+      cargarConfiguraciones();
     } catch (error) {
-      console.error('❌ Error al cambiar estado:', error);
       Alert.alert('Error', 'No se pudo cambiar el estado');
     }
   };
 
   // ============================================================
-  // 4. FILTRAR ALERTAS
+  // ABRIR EDITOR
   // ============================================================
-  const alertasFiltradas = alertas.filter(a => {
-    if (filtro === 'tecnicos') return a.tipo_usuario === 'tecnico';
-    if (filtro === 'coordinadores') return a.tipo_usuario === 'coordinador';
+  const abrirEditor = (item) => {
+    setConfigEditando(item);
+    setHoraEntrada(new Date(`2000-01-01T${item.hora_entrada}:00`));
+    setHoraSalida(new Date(`2000-01-01T${item.hora_salida}:00`));
+    setHoraDescansoInicio(new Date(`2000-01-01T${item.hora_descanso_inicio}:00`));
+    setHoraDescansoFin(new Date(`2000-01-01T${item.hora_descanso_fin}:00`));
+    setTiempoEditando(String(item.tiempo_alerta_minutos));
+    setActivoEditando(item.activo);
+    setModalVisible(true);
+  };
+
+  // ============================================================
+  // FILTRAR
+  // ============================================================
+  const configsFiltradas = configuraciones.filter(c => {
+    if (filtro === 'tecnicos') return c.tipo_usuario === 'tecnico';
+    if (filtro === 'coordinadores') return c.tipo_usuario === 'coordinador';
     return true;
   });
 
   // ============================================================
-  // 5. RENDERIZADO
+  // RENDERIZADO
   // ============================================================
   if (cargando) {
     return (
@@ -116,7 +152,6 @@ export default function ConfigurarAlertas({ route, navigation }) {
     <View style={styles.container}>
       <Text style={styles.title}>🔔 Configurar Alertas</Text>
 
-      {/* FILTROS */}
       <View style={styles.filtrosContainer}>
         <TouchableOpacity
           style={[styles.filtroBtn, filtro === 'todas' && styles.filtroActivo]}
@@ -138,24 +173,23 @@ export default function ConfigurarAlertas({ route, navigation }) {
         </TouchableOpacity>
       </View>
 
-      {/* LISTA DE ALERTAS */}
       <FlatList
-        data={alertasFiltradas}
+        data={configsFiltradas}
         keyExtractor={(item) => item.id.toString()}
         renderItem={({ item }) => (
           <View style={[styles.card, !item.activo && styles.cardInactivo]}>
             <View style={styles.cardHeader}>
-              <Text style={styles.usuarioNombre}>
-                {item.tecnico_nombre || 'Usuario'}
-              </Text>
+              <Text style={styles.usuarioNombre}>{item.tecnico_nombre}</Text>
               <Text style={styles.usuarioRol}>
                 {item.tipo_usuario === 'tecnico' ? '🔧 Técnico' : '📋 Coordinador'}
               </Text>
             </View>
 
             <View style={styles.cardBody}>
-              <Text style={styles.label}>⏱️ Tiempo de inactividad:</Text>
-              <Text style={styles.valor}>{item.tiempo_inactividad} minutos</Text>
+              <Text style={styles.label}>⏰ Entrada: {item.hora_entrada}</Text>
+              <Text style={styles.label}>⏰ Salida: {item.hora_salida}</Text>
+              <Text style={styles.label}>☕ Descanso: {item.hora_descanso_inicio} - {item.hora_descanso_fin}</Text>
+              <Text style={styles.label}>⏱️ Alerta: {item.tiempo_alerta_minutos} minutos</Text>
             </View>
 
             <View style={styles.cardFooter}>
@@ -169,12 +203,7 @@ export default function ConfigurarAlertas({ route, navigation }) {
 
               <TouchableOpacity
                 style={styles.editButton}
-                onPress={() => {
-                  setAlertaEditando(item);
-                  setTiempoEditando(String(item.tiempo_inactividad));
-                  setActivoEditando(item.activo);
-                  setModalVisible(true);
-                }}
+                onPress={() => abrirEditor(item)}
               >
                 <Text style={styles.editButtonText}>✏️ Editar</Text>
               </TouchableOpacity>
@@ -183,24 +212,47 @@ export default function ConfigurarAlertas({ route, navigation }) {
         )}
         ListEmptyComponent={
           <Text style={styles.empty}>
-            No hay configuraciones de alertas.
-            {filtro !== 'todas' && ' Prueba con otro filtro.'}
+            No hay configuraciones de horarios.
+            Configura un horario desde "Configurar Horario".
           </Text>
         }
       />
 
-      {/* MODAL DE EDICIÓN */}
       <Modal
         animationType="slide"
         transparent={true}
         visible={modalVisible}
         onRequestClose={() => setModalVisible(false)}
       >
-        <View style={styles.modalContainer}>
+        <ScrollView style={styles.modalContainer}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>✏️ Editar Configuración</Text>
-            
-            <Text style={styles.modalLabel}>⏱️ Tiempo de inactividad (minutos)</Text>
+
+            <Text style={styles.modalLabel}>⏰ Hora de entrada</Text>
+            <Button
+              title={horaEntrada.toTimeString().slice(0, 5)}
+              onPress={() => showTimePicker('entrada')}
+            />
+
+            <Text style={styles.modalLabel}>⏰ Hora de salida</Text>
+            <Button
+              title={horaSalida.toTimeString().slice(0, 5)}
+              onPress={() => showTimePicker('salida')}
+            />
+
+            <Text style={styles.modalLabel}>☕ Inicio de descanso</Text>
+            <Button
+              title={horaDescansoInicio.toTimeString().slice(0, 5)}
+              onPress={() => showTimePicker('descansoInicio')}
+            />
+
+            <Text style={styles.modalLabel}>☕ Fin de descanso</Text>
+            <Button
+              title={horaDescansoFin.toTimeString().slice(0, 5)}
+              onPress={() => showTimePicker('descansoFin')}
+            />
+
+            <Text style={styles.modalLabel}>⏱️ Tiempo de alerta (minutos)</Text>
             <TextInput
               style={styles.modalInput}
               keyboardType="numeric"
@@ -215,6 +267,16 @@ export default function ConfigurarAlertas({ route, navigation }) {
                 onValueChange={setActivoEditando}
               />
             </View>
+
+            {mostrarPicker && (
+              <DateTimePicker
+                value={new Date()}
+                mode="time"
+                is24Hour={true}
+                display="default"
+                onChange={onTimeChange}
+              />
+            )}
 
             <View style={styles.modalButtons}>
               <TouchableOpacity
@@ -231,40 +293,18 @@ export default function ConfigurarAlertas({ route, navigation }) {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </ScrollView>
       </Modal>
     </View>
   );
 }
 
-// ============================================================
-// ESTILOS
-// ============================================================
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 20,
-    backgroundColor: '#f5f5f5'
-  },
-  centered: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center'
-  },
-  cargandoText: {
-    marginTop: 10,
-    fontSize: 16,
-    color: '#666'
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 20
-  },
-  filtrosContainer: {
-    flexDirection: 'row',
-    marginBottom: 15
-  },
+  container: { flex: 1, padding: 20, backgroundColor: '#f5f5f5' },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  cargandoText: { marginTop: 10, fontSize: 16, color: '#666' },
+  title: { fontSize: 24, fontWeight: 'bold', marginBottom: 20 },
+  filtrosContainer: { flexDirection: 'row', marginBottom: 15 },
   filtroBtn: {
     paddingHorizontal: 15,
     paddingVertical: 8,
@@ -272,137 +312,30 @@ const styles = StyleSheet.create({
     backgroundColor: '#e0e0e0',
     marginRight: 10
   },
-  filtroActivo: {
-    backgroundColor: '#007bff'
-  },
-  filtroText: {
-    fontWeight: 'bold',
-    color: '#333'
-  },
-  card: {
-    backgroundColor: '#fff',
-    padding: 15,
-    borderRadius: 10,
-    marginBottom: 10,
-    elevation: 2
-  },
-  cardInactivo: {
-    opacity: 0.5
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 10
-  },
-  usuarioNombre: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333'
-  },
-  usuarioRol: {
-    fontSize: 14,
-    color: '#666'
-  },
-  cardBody: {
-    flexDirection: 'row',
-    marginBottom: 10
-  },
-  label: {
-    fontSize: 14,
-    color: '#666',
-    marginRight: 5
-  },
-  valor: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#333'
-  },
-  cardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center'
-  },
-  switchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center'
-  },
-  switchLabel: {
-    marginRight: 10,
-    fontSize: 14,
-    color: '#666'
-  },
-  editButton: {
-    backgroundColor: '#ff6f00',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6
-  },
-  editButtonText: {
-    color: '#fff',
-    fontWeight: 'bold'
-  },
-  empty: {
-    textAlign: 'center',
-    color: '#999',
-    marginTop: 20
-  },
-  // Modal
-  modalContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)'
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 15,
-    padding: 25,
-    width: '85%'
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 20,
-    textAlign: 'center'
-  },
-  modalLabel: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 5
-  },
-  modalInput: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    padding: 10,
-    fontSize: 16,
-    marginBottom: 15
-  },
-  modalSwitchContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between'
-  },
-  modalButton: {
-    flex: 1,
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginHorizontal: 5
-  },
-  cancelButton: {
-    backgroundColor: '#e0e0e0'
-  },
-  saveButton: {
-    backgroundColor: '#007bff'
-  },
-  modalButtonText: {
-    fontWeight: 'bold',
-    color: '#fff'
-  }
+  filtroActivo: { backgroundColor: '#007bff' },
+  filtroText: { fontWeight: 'bold', color: '#333' },
+  card: { backgroundColor: '#fff', padding: 15, borderRadius: 10, marginBottom: 10, elevation: 2 },
+  cardInactivo: { opacity: 0.5 },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
+  usuarioNombre: { fontSize: 16, fontWeight: 'bold', color: '#333' },
+  usuarioRol: { fontSize: 14, color: '#666' },
+  cardBody: { marginBottom: 10 },
+  label: { fontSize: 14, color: '#666', marginBottom: 2 },
+  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  switchContainer: { flexDirection: 'row', alignItems: 'center' },
+  switchLabel: { marginRight: 10, fontSize: 14, color: '#666' },
+  editButton: { backgroundColor: '#ff6f00', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 },
+  editButtonText: { color: '#fff', fontWeight: 'bold' },
+  empty: { textAlign: 'center', color: '#999', marginTop: 20 },
+  modalContainer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', padding: 20 },
+  modalContent: { backgroundColor: '#fff', borderRadius: 15, padding: 25, marginTop: 50 },
+  modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 20, textAlign: 'center' },
+  modalLabel: { fontSize: 14, color: '#666', marginTop: 10, marginBottom: 5 },
+  modalInput: { borderWidth: 1, borderColor: '#ccc', borderRadius: 8, padding: 10, fontSize: 16, marginBottom: 15 },
+  modalSwitchContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginVertical: 15 },
+  modalButtons: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 20 },
+  modalButton: { flex: 1, padding: 12, borderRadius: 8, alignItems: 'center', marginHorizontal: 5 },
+  cancelButton: { backgroundColor: '#e0e0e0' },
+  saveButton: { backgroundColor: '#007bff' },
+  modalButtonText: { fontWeight: 'bold', color: '#fff' }
 });
